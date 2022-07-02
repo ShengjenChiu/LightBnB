@@ -73,7 +73,6 @@ exports.getUserWithId = getUserWithId;
  * @return {Promise<{}>} A promise to the user.
  */
 const addUser =  function(user) {
-console.log('before pool query:user: ', user);
   return pool
   .query(
    `INSERT INTO users (
