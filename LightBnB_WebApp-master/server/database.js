@@ -5,16 +5,6 @@ const { Pool } = require('pg');
 
 const pool = new Pool();
 
-// const pool = new Pool({
-//   user: 'vagrant',
-//   password: '123',
-//   host: 'localhost',
-//   database: 'bootcampx'
-// });
-
-// the following assumes that you named your connection variable `pool`
-// pool.query(`SELECT title FROM properties LIMIT 10;`)
-// .then(response => {}); //console.log(response)
 
 /// Users
 
@@ -78,7 +68,7 @@ const addUser =  function(user) {
    `INSERT INTO users (
     name, email, password)
     VALUES (
-    $1, $2, $3);`, 
+    $1, $2, $3) RETURNING *;`, 
     [user.name, user.email, user.password])
   .then((result) => {
     console.log(result.rows[0]);
@@ -132,18 +122,62 @@ exports.getAllReservations = getAllReservations;
  * @return {Promise<[{}]>}  A promise to the properties.
  */
 const getAllProperties = function(options, limit = 10) {
-  // const limitedProperties = {};
-  // for (let i = 1; i <= limit; i++) {
-  //   limitedProperties[i] = properties[i];
-  // }
+  let queryParams = [];
+  let queryString = `
+    SELECT properties.*, cost_per_night,
+  avg(property_reviews.rating) AS average_rating
+    FROM properties
+    JOIN property_reviews ON property_reviews.property_id = properties.id  
+  `;
+
+  if (options.city) {
+    queryParams.push(`%${options.city}%`);
+
+    queryString += `WHERE city LIKE $${queryParams.length}`;
+  }
+
+  if (options.owner_id) {
+    queryParams.push(`${options.owner_id}`);
+
+    queryString += `WHERE properties.owner_id = $${queryParams.length}`;
+  }
+
+  if (options.minimum_price_per_night && options.maximum_price_per_night) {
+
+// console.log(`options.minimum_price_per_night` + options.minimum_price_per_night);
+// console.log(`options.maximum_price_per_night` + options.maximum_price_per_night);
+
+    queryParams.push(`${options.minimum_price_per_night}`);
+    queryString += `WHERE properties.cost_per_night > $${queryParams.length}`;
+
+    queryParams.push(`${options.maximum_price_per_night}`);
+    queryString += `AND properties.cost_per_night < $${queryParams.length}`;
+
+
+  }
+  
+  if (options.minimum_rating) {
+// console.log(`options.minimum_rating` + options.minimum_rating);
+
+    queryParams.push(`%${options.minimum_rating}%`);
+
+    queryString += `WHERE property_reviews.rating >= $${queryParams.length}`;
+
+
+  }
+  
+
+  queryParams.push(limit);
+  queryString += `
+    GROUP BY properties.id
+    ORDER BY cost_per_night
+    LIMIT $${queryParams.length};`;
+
+  console.log(queryString, queryParams);
 
   return pool
-  .query(`SELECT * 
-          FROM properties 
-          LIMIT $1;`, 
-  [limit])
+  .query(queryString, queryParams)
   .then((result) => {
-    console.log(result.rows);
     return result.rows;
   })
   .catch((err) => {
